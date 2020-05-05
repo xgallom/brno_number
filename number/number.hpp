@@ -4,31 +4,63 @@
 #include <vector>
 
 class number {
+
+
+	//-TYPE-DEFINITIONS------------------------------------------------------------------------------------------------
 public:
+	// Sign of the number
+	using sign_t = bool;
+
+	// Possible enumerations of the sign
+	enum Sign : sign_t {
+		Positive = true,
+		Negative = false
+	};
+
+	// A type for a numeric chunk
 	using num_t = uint32_t;
 	using snum_t = int32_t;
+
+	// A type for an arithmetic operation on a chunk (for overflow checking)
 	using result_t = uint64_t;
 	using sresult_t = int64_t;
-	using exp_t = int64_t;
-	using numsize_t = size_t;
-	using capacity_t = size_t;
-	using precision_t = capacity_t;
+
+	// Types for various numeric values
+	using digits_t = uint32_t;
+	using exp_t = int32_t;
+
+	// A type for a vector of numeric chunks
 	using data_t = std::vector<num_t>;
 
-	static constexpr precision_t DefaultPrecision = 0;
-	static constexpr capacity_t DefaultCapacity = 1 + DefaultPrecision;
-	// MSB is the sign flag
-	static constexpr numsize_t SignFlag = numsize_t(0x1) << (std::numeric_limits<numsize_t>::digits - 1);
-	// Result in lower DWORD, Overflow in upper DWORD
+
+	//-CONSTANT-DEFINITIONS--------------------------------------------------------------------------------------------
+
+	static constexpr exp_t DefaultExponent = 0;
+
+	// Bit offset of the overflow part of the result
 	static constexpr result_t OverflowOffset = std::numeric_limits<result_t>::digits >> 1;
+	// Bit mask of the result part of the result
 	static constexpr result_t ResultMask = std::numeric_limits<result_t>::max() >> OverflowOffset;
+	// Bit mask of the overflow part of the result
 	static constexpr result_t OverflowMask = ~ResultMask;
 
-private:
-	numsize_t m_size = 1;
-	exp_t m_exponent = 0;
-	data_t m_data = { 0 };
 
+	//-MEMBER-DECLARATIONS---------------------------------------------------------------------------------------------
+private:
+	// Value = (m_sign ? 1 : -1) * (m_nom / m_den) * 2^(sizeof(chunk) * m_exp)
+
+	// Nominator and Denominator
+	data_t m_nom = {};
+	data_t m_den = {};
+
+	// Exponent
+	exp_t m_exp = DefaultExponent;
+
+	// Sign
+	sign_t m_sign = Positive;
+
+
+	//-DEFAULT-CONSTRUCTORS-&-ASSIGNMENTS------------------------------------------------------------------------------
 public:
 	number() = default;
 	number(const number&) = default;
@@ -36,67 +68,60 @@ public:
 	number& operator=(const number&) = default;
 	number& operator=(number&&) = default;
 
+
+	//-CONSTRUCTORS----------------------------------------------------------------------------------------------------
+
+	// Implicitly convertible constructor from an int value
 	number(int value);
-	inline explicit number(numsize_t size, exp_t exponent, data_t data)
-		: m_size(size), m_exponent(exponent), m_data(data)
+
+	// Explicit constructor for testing and debugging purposes
+	inline explicit number(Sign sign, exp_t exp = DefaultExponent, data_t&& nom = {}, data_t&& den = {})
+		: m_nom{ std::move(nom) }, m_den{ std::move(den) }, m_exp{ exp }, m_sign{ sign }
 	{}
 
-	inline numsize_t size() const { return isNegative() ? ~m_size : m_size; }
-	inline exp_t exponent() const { return m_exponent; }
-	inline exp_t minimumExponent() const { return m_exponent - size(); }
-	inline capacity_t capacity() const { return m_data.capacity(); }
-	inline precision_t precision() const { return capacity() - 1; }
-	inline bool isNegative() const { return m_size & SignFlag; }
-	inline bool isPositive() const { return !isNegative(); }
-	inline bool isNotEmpty() const { return bool(size()); }
 
-	number& negate();
+	//-MEMBER-ACCESSORS------------------------------------------------------------------------------------------------
+
+	inline exp_t exp() const { return m_exp; }
+	inline Sign sign() const { return static_cast<Sign>(m_sign); }
+	inline const data_t& nom() const { return m_nom; }
+	inline const data_t& den() const { return m_den; }
+	inline bool isZero() const { return m_nom.empty() || m_den.empty(); }
+
+
+	//-OPERATORS-------------------------------------------------------------------------------------------------------
+
 	number operator-() const;
 
 	friend number operator+(number left, number right);
+	friend number operator-(number left, number right);
 	friend number operator*(const number& left, const number& right);
+	friend number operator/(const number& left, const number& right);
 
-	inline const num_t& operator[](size_t offset) const { return m_data[offset]; }
+	number power(exp_t exp) const;
+	number sqrt(digits_t digits) const;
 
+	// Returns true if non-zero
 	explicit operator bool() const;
-	
-	void truncate();
 
+
+	//-INTERNAL-HELPER-METHODS-----------------------------------------------------------------------------------------
 protected:
-	inline number(numsize_t size, exp_t exponent)
-		: m_size(size), m_exponent(exponent)
-	{
-		reserveSize();
-	}
+	// Constructor for empty initialization of specified size
+	inline number(Sign sign, exp_t exp, size_t nomSize, size_t denSize)
+		: m_nom(nomSize, {}), m_den(denSize, {}), m_exp{ exp }, m_sign{ sign }
+	{}
 
-	void reserve(capacity_t capacity);
-	void reserveSize();
-	void pushFront(num_t value = 0, size_t count = 1);
-	void pushBack(num_t value = 0, size_t count = 1);
 
-	void turnNegative();
-
+	//-STATIC-ARITHMETIC-HELPER-METHODS--------------------------------------------------------------------------------
 public:
-	inline num_t* begin() { return m_data.data(); }
-	inline const num_t* begin() const { return m_data.data(); }
-
-	inline num_t* end() { return begin() + size(); }
-	inline const num_t* end() const { return begin() + size(); }
-
-	inline num_t* nth(numsize_t n) { return begin() + n; }
-	inline const num_t* nth(numsize_t n) const { return begin() + n - 1; }
-
-	inline num_t* rbegin() { return end() - 1; }
-	inline const num_t* rbegin() const { return end() - 1; }
-
-	inline num_t* rend() { return begin() - 1; }
-	inline const num_t* rend() const { return begin() - 1; }
-
-protected:
-	// Add/subtract two positive numbers
-	static number addPositive(number&& left, number&& right);
-	static number subPositive(number&& left, number&& right);
-	static number multiply(const number& left, const number& right);
+	static number AddPositive(number&& left, number&& right);
+	static number SubPositive(number&& left, number&& right);
+	static number Multiply(const number& left, const number& right);
+	static number Divide(const number& left, const number& right);
+	static number Power(const number& num, exp_t exp);
+	static number Sqrt(const number& num, digits_t digits);
 };
 
+// Output stream operator overload for debug purposes
 std::ostream& operator<<(std::ostream& out, const number& value);

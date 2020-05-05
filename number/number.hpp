@@ -27,7 +27,8 @@ public:
 
 	// Types for various numeric values
 	using digits_t = uint32_t;
-	using exp_t = int32_t;
+	using exp_t = int64_t;
+	using uexp_t = uint64_t;
 
 	// A type for a vector of numeric chunks
 	using data_t = std::vector<num_t>;
@@ -35,6 +36,7 @@ public:
 
 	//-CONSTANT-DEFINITIONS--------------------------------------------------------------------------------------------
 
+	static constexpr Sign DefaultSign = Positive;
 	static constexpr exp_t DefaultExponent = 0;
 
 	// Bit offset of the overflow part of the result
@@ -54,19 +56,20 @@ private:
 	data_t m_den = {};
 
 	// Exponent
-	exp_t m_exp = DefaultExponent;
+	exp_t m_nomExp = DefaultExponent;
+	exp_t m_denExp = DefaultExponent;
 
 	// Sign
-	sign_t m_sign = Positive;
+	sign_t m_sign = DefaultSign;
 
 
 	//-DEFAULT-CONSTRUCTORS-&-ASSIGNMENTS------------------------------------------------------------------------------
 public:
 	number() = default;
 	number(const number&) = default;
-	number(number&&) = default;
+	number(number&&) noexcept = default;
 	number& operator=(const number&) = default;
-	number& operator=(number&&) = default;
+	number& operator=(number&&) noexcept = default;
 
 
 	//-CONSTRUCTORS----------------------------------------------------------------------------------------------------
@@ -75,53 +78,80 @@ public:
 	number(int value);
 
 	// Explicit constructor for testing and debugging purposes
-	inline explicit number(Sign sign, exp_t exp = DefaultExponent, data_t&& nom = {}, data_t&& den = {})
-		: m_nom{ std::move(nom) }, m_den{ std::move(den) }, m_exp{ exp }, m_sign{ sign }
+	inline explicit number(Sign sign, exp_t nomExp, data_t&& nom, exp_t denExp, data_t&& den) noexcept :
+		m_nom{ std::move(nom) },
+		m_den{ std::move(den) },
+		m_nomExp{ nomExp },
+		m_denExp{ denExp },
+		m_sign{ sign }
 	{}
+
+	// Special value constructors
+	static inline number Zero()      { return number(Positive, DefaultExponent, data_t{}, DefaultExponent, data_t{ 1 }); }
+	static inline number NaN()       { return number(Positive, DefaultExponent, data_t{ 1 }, DefaultExponent, data_t{}); }
+	static inline number Undefined() { return number(); }
+	static inline number One()       { return number(Positive, DefaultExponent, data_t{ 1 }, DefaultExponent, data_t{ 1 }); }
 
 
 	//-MEMBER-ACCESSORS------------------------------------------------------------------------------------------------
 
-	inline exp_t exp() const { return m_exp; }
-	inline Sign sign() const { return static_cast<Sign>(m_sign); }
-	inline const data_t& nom() const { return m_nom; }
-	inline const data_t& den() const { return m_den; }
-	inline bool isZero() const { return m_nom.empty() || m_den.empty(); }
+	inline const data_t& nom() const noexcept { return m_nom; }
+	inline const data_t& den() const noexcept { return m_den; }
+	inline exp_t exp()         const noexcept { return m_nomExp - m_denExp; }
+	inline exp_t nomExp()      const noexcept { return m_nomExp; }
+	inline exp_t denExp()      const noexcept { return m_denExp; }
+	inline Sign sign()         const noexcept { return static_cast<Sign>(m_sign); }
+
+	inline bool isZero()       const noexcept { return m_nom.empty() & !m_den.empty(); }
+	inline bool isNonZero()    const noexcept { return !m_nom.empty(); }
+	inline bool isNaN()        const noexcept { return !m_nom.empty() & m_den.empty(); }
+	inline bool isNotNaN()     const noexcept { return !m_den.empty(); }
+	inline bool isUndefined()  const noexcept { return m_nom.empty() & m_den.empty(); }
 
 
 	//-OPERATORS-------------------------------------------------------------------------------------------------------
 
 	number operator-() const;
 
-	friend number operator+(number left, number right);
-	friend number operator-(number left, number right);
+	friend number operator+(const number& left, const number& right);
+	friend number operator-(const number& left, const number& right);
 	friend number operator*(const number& left, const number& right);
 	friend number operator/(const number& left, const number& right);
 
+	// Returns true if number is non-zero
+	explicit inline operator bool() const noexcept { return isNonZero(); }
+
+
+	//-ARITHMETIC-MEMBER-FUNCTIONS-------------------------------------------------------------------------------------
+
 	number power(exp_t exp) const;
 	number sqrt(digits_t digits) const;
-
-	// Returns true if non-zero
-	explicit operator bool() const;
 
 
 	//-INTERNAL-HELPER-METHODS-----------------------------------------------------------------------------------------
 protected:
 	// Constructor for empty initialization of specified size
-	inline number(Sign sign, exp_t exp, size_t nomSize, size_t denSize)
-		: m_nom(nomSize, {}), m_den(denSize, {}), m_exp{ exp }, m_sign{ sign }
+	inline number(Sign sign, exp_t nomExp, size_t nomSize, exp_t denExp, size_t denSize) :
+		m_nom(nomSize, {}),
+		m_den(denSize, {}),
+		m_nomExp{ nomExp },
+		m_denExp{ denExp },
+		m_sign{ sign }
 	{}
+
+	// Turn a number negative
+	inline number& negate() noexcept { m_sign = !m_sign; return *this; }
 
 
 	//-STATIC-ARITHMETIC-HELPER-METHODS--------------------------------------------------------------------------------
 public:
-	static number AddPositive(number&& left, number&& right);
-	static number SubPositive(number&& left, number&& right);
+	static number AddPositive(const number& left, const number& right);
+	static number SubPositive(const number& left, const number& right);
 	static number Multiply(const number& left, const number& right);
 	static number Divide(const number& left, const number& right);
 	static number Power(const number& num, exp_t exp);
 	static number Sqrt(const number& num, digits_t digits);
 };
 
-// Output stream operator overload for debug purposes
+//-GLOBAL-OPERATOR-OVERLOADS-------------------------------------------------------------------------------------------
 std::ostream& operator<<(std::ostream& out, const number& value);

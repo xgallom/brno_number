@@ -20,7 +20,8 @@ public:
 	// MSB is the sign flag
 	static constexpr numsize_t SignFlag = numsize_t(0x1) << (std::numeric_limits<numsize_t>::digits - 1);
 	// Result in lower DWORD, Overflow in upper DWORD
-	static constexpr result_t ResultMask = std::numeric_limits<result_t>::max() >> (std::numeric_limits<result_t>::digits >> 1);
+	static constexpr result_t OverflowOffset = std::numeric_limits<result_t>::digits >> 1;
+	static constexpr result_t ResultMask = std::numeric_limits<result_t>::max() >> OverflowOffset;
 	static constexpr result_t OverflowMask = ~ResultMask;
 
 private:
@@ -36,7 +37,7 @@ public:
 	number& operator=(number&&) = default;
 
 	number(int value);
-	number(numsize_t size, exp_t exponent, data_t data)
+	inline explicit number(numsize_t size, exp_t exponent, data_t data)
 		: m_size(size), m_exponent(exponent), m_data(data)
 	{}
 
@@ -53,9 +54,16 @@ public:
 	number operator-() const;
 
 	friend number operator+(number left, number right);
+	friend number operator*(const number& left, const number& right);
+
+	inline const num_t& operator[](size_t offset) const { return m_data[offset]; }
+
+	explicit operator bool() const;
+	
+	void truncate();
 
 protected:
-	number(numsize_t size, exp_t exponent)
+	inline number(numsize_t size, exp_t exponent)
 		: m_size(size), m_exponent(exponent)
 	{
 		reserveSize();
@@ -88,6 +96,7 @@ protected:
 	// Add/subtract two positive numbers
 	static number addPositive(number&& left, number&& right);
 	static number subPositive(number&& left, number&& right);
+	static number multiply(const number& left, const number& right);
 };
 
 std::ostream& operator<<(std::ostream& out, const number& value);

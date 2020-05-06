@@ -1,8 +1,5 @@
 #include "number.hpp"
 
-#include <algorithm>
-#include <iomanip>
-
 
 
 //-TYPE-DEFINITIONS----------------------------------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <algorithm>
+#include <iomanip>
 #include <vector>
 
 class number {

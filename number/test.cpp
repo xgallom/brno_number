@@ -19,8 +19,8 @@ int main()
 {
 	//number a(0x7fffffff), b(0x7fffffff), apb = a + b, apbpapb = apb + apb, apbpapbpa = apbpapb + a;
 	number
-			a(Sign::Positive, 2, data_t{2, 1}, 0, data_t{4}),
-			b(Sign::Positive, 2, data_t{4}, 0, data_t{8});
+			a(Sign::Negative, 2, data_t{2, 1}, 0, data_t{4}),
+			b(Sign::Negative, 2, data_t{4}, 0, data_t{8});
 	//		a(2, 5, number::data_t({ 0xffffffff, 0xffffffff })),
 	//		b(2, 2, number::data_t({ 0xffffffff, 0xffffffff }));
 

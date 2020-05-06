@@ -131,17 +131,19 @@ public:
 
 	number operator-() const;
 
-	friend number operator+(const number &left, const number &right);
-	friend number operator-(const number &left, const number &right);
-	friend number operator*(const number &left, const number &right);
-	friend number operator/(const number &left, const number &right);
-
 	// Returns true if number is non-zero
 	explicit inline operator bool() const noexcept { return isNonZero(); }
 
 
 
 	//-ARITHMETIC-MEMBER-FUNCTIONS-------------------------------------------------------------------------------------
+
+	// Turn a number negative
+	inline number &negate() noexcept
+	{
+		m_sign = !m_sign;
+		return *this;
+	}
 
 	number power(exp_t exp) const;
 	number sqrt(digits_t digits) const;
@@ -159,13 +161,6 @@ protected:
 			m_denExp{denExp},
 			m_sign{sign} {}
 
-	// Turn a number negative
-	inline number &negate() noexcept
-	{
-		m_sign = !m_sign;
-		return *this;
-	}
-
 
 
 	//-STATIC-ARITHMETIC-HELPER-METHODS--------------------------------------------------------------------------------
@@ -176,10 +171,29 @@ public:
 	static number Divide(const number &left, const number &right);
 	static number Power(const number &num, exp_t exp);
 	static number Sqrt(const number &num, digits_t digits);
+
+	static bool Equal(const number &left, const number &right);
+	static bool NotEqual(const number &left, const number &right);
+	static bool Less(const number &left, const number &right);
+	static bool LessEqual(const number &left, const number &right);
+	static bool More(const number &left, const number &right);
+	static bool MoreEqual(const number &left, const number &right);
 };
 
 
 
 //-GLOBAL-OPERATOR-OVERLOADS-------------------------------------------------------------------------------------------
+
+number operator+(const number &left, const number &right);
+number operator-(const number &left, const number &right);
+number operator*(const number &left, const number &right);
+number operator/(const number &left, const number &right);
+
+bool operator==(const number &left, const number &right);
+bool operator!=(const number &left, const number &right);
+bool operator<(const number &left, const number &right);
+bool operator<=(const number &left, const number &right);
+bool operator>(const number &left, const number &right);
+bool operator>=(const number &left, const number &right);
 
 std::ostream &operator<<(std::ostream &out, const number &value);

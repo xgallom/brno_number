@@ -4,6 +4,7 @@
 #include <iomanip>
 
 
+
 //-TYPE-DEFINITIONS----------------------------------------------------------------------------------------------------
 
 using sign_t = number::sign_t;
@@ -516,6 +517,74 @@ static bool checkSqrt(number &result, const number &num)
 
 
 
+//-COMPARISON-PRELIMINARY-CHECKS---------------------------------------------------------------------------------------
+//    These functions Are run before the actual computation to do bound checking, and return true if they pass
+
+enum ComparisonCheckResult {
+	Fail = false,
+	Pass = true,
+	Compare
+};
+
+static ComparisonCheckResult checkEqual(const number &left, const number &right)
+{
+	const bool
+			leftUndef = left.isUndefined(),
+			rightUndef = right.isUndefined(),
+			leftSign = left.sign(),
+			rightSign = right.sign(),
+			leftNan = left.isNaN(),
+			rightNan = right.isNaN(),
+			leftZero = left.isZero(),
+			rightZero = right.isZero();
+
+	if(leftUndef | rightUndef | (leftSign != rightSign))
+		return Fail;
+	else if((leftNan && rightNan) || (leftZero && rightZero))
+		return Pass;
+	return Compare;
+}
+
+static ComparisonCheckResult checkLess(const number &left, const number &right)
+{
+	const bool
+			leftUndef = left.isUndefined(),
+			rightUndef = right.isUndefined(),
+			leftSign = left.sign(),
+			rightSign = right.sign(),
+			leftNan = left.isNaN(),
+			rightNan = right.isNaN(),
+			leftZero = left.isZero(),
+			rightZero = right.isZero();
+
+	if(leftUndef | rightUndef | ((leftZero && rightZero) || (leftNan && rightNan)))
+		return Fail;
+	else if(leftSign != rightSign)
+		return left == Sign::Negative ? Pass : Fail;
+	return Compare;
+}
+
+static ComparisonCheckResult checkMore(const number &left, const number &right)
+{
+	const bool
+			leftUndef = left.isUndefined(),
+			rightUndef = right.isUndefined(),
+			leftSign = left.sign(),
+			rightSign = right.sign(),
+			leftNan = left.isNaN(),
+			rightNan = right.isNaN(),
+			leftZero = left.isZero(),
+			rightZero = right.isZero();
+
+	if(leftUndef | rightUndef | ((leftZero && rightZero) || (leftNan && rightNan)))
+		return Fail;
+	else if(leftSign != rightSign)
+		return left == Sign::Positive ? Pass : Fail;
+	return Compare;
+}
+
+
+
 //-CONSTRUCTORS--------------------------------------------------------------------------------------------------------
 
 number::number(int value) :
@@ -535,76 +604,6 @@ number number::operator-() const
 	number result = *this;
 	result.negate();
 	return result;
-}
-
-number operator+(const number &left, const number &right)
-{
-	switch(left.sign()) {
-		case Sign::Positive:
-			switch(right.sign()) {
-				// +left + +right <=> left + right
-				case Sign::Positive:
-					return number::AddPositive(left, right);
-
-					// +left + -right <=> left - right
-				case Sign::Negative:
-					return number::SubPositive(left, right);
-			}
-
-		case Sign::Negative:
-			switch(right.sign()) {
-				// -left + +right <=> right - left
-				case Sign::Positive:
-					return number::SubPositive(right, left);
-
-					// -left + -right <=> -(left + right)
-				case Sign::Negative:
-					return number::AddPositive(left, right).negate();
-			}
-	}
-
-	// Remove compiler warning
-	return {};
-}
-
-number operator-(const number &left, const number &right)
-{
-	switch(left.sign()) {
-		case Sign::Positive:
-			switch(right.sign()) {
-				// +left - +right <=> left - right
-				case Sign::Positive:
-					return number::SubPositive(left, right);
-
-					// +left - -right <=> left + right
-				case Sign::Negative:
-					return number::AddPositive(left, right);
-			}
-
-		case Sign::Negative:
-			switch(right.sign()) {
-				// -left - +right <=> -(left + right)
-				case Sign::Positive:
-					return number::AddPositive(right, left).negate();
-
-					// -left - -right <=> right - left
-				case Sign::Negative:
-					return number::SubPositive(right, left).negate();
-			}
-	}
-
-	// Remove compiler warning
-	return {};
-}
-
-number operator*(const number &left, const number &right)
-{
-	return number::Multiply(left, right);
-}
-
-number operator/(const number &left, const number &right)
-{
-	return number::Divide(left, right);
 }
 
 
@@ -726,9 +725,191 @@ number number::Sqrt(const number &num, digits_t)
 	return result;
 }
 
+bool number::Equal(const number &left, const number &right)
+{
+	const auto checkResult = checkEqual(left, right);
+
+	if(checkResult == Compare) {
+		data_t leftNormal, rightNormal;
+
+		const exp_t
+				leftExp = multiply(leftNormal, left.m_nomExp, left.m_nom, right.m_denExp, right.m_den),
+				rightExp = multiply(rightNormal, right.m_nomExp, right.m_nom, left.m_denExp, left.m_den);
+
+		return leftExp == rightExp && leftNormal == rightNormal;
+	}
+	else
+		return bool(checkResult);
+}
+
+bool number::NotEqual(const number &left, const number &right)
+{
+	return !Equal(left, right);
+}
+
+bool number::Less(const number &left, const number &right)
+{
+	const auto checkResult = checkLess(left, right);
+
+	if(checkResult == Compare) {
+		data_t leftNormal, rightNormal;
+
+		const exp_t
+				leftExp = multiply(leftNormal, left.m_nomExp, left.m_nom, right.m_denExp, right.m_den),
+				rightExp = multiply(rightNormal, right.m_nomExp, right.m_nom, left.m_denExp, left.m_den);
+
+		if(left.sign() == Sign::Positive) {
+			if(leftExp == rightExp)
+				return leftNormal < rightNormal;
+			else
+				return leftExp < rightExp;
+		}
+		else {
+			if(leftExp == rightExp)
+				return leftNormal > rightNormal;
+			else
+				return leftExp > rightExp;
+		}
+	}
+	else
+		return bool(checkResult);
+}
+
+bool number::LessEqual(const number &left, const number &right)
+{
+	return !More(left, right);
+}
+
+bool number::More(const number &left, const number &right)
+{
+	const auto checkResult = checkMore(left, right);
+
+	if(checkResult == Compare) {
+		data_t leftNormal, rightNormal;
+
+		const exp_t
+				leftExp = multiply(leftNormal, left.m_nomExp, left.m_nom, right.m_denExp, right.m_den),
+				rightExp = multiply(rightNormal, right.m_nomExp, right.m_nom, left.m_denExp, left.m_den);
+
+		if(left.sign() == Sign::Positive) {
+			if(leftExp == rightExp)
+				return leftNormal > rightNormal;
+			else
+				return leftExp > rightExp;
+		}
+		else {
+			if(leftExp == rightExp)
+				return leftNormal < rightNormal;
+			else
+				return leftExp < rightExp;
+		}
+	}
+	else
+		return bool(checkResult);
+}
+
+bool number::MoreEqual(const number &left, const number &right)
+{
+	return !Less(left, right);
+}
+
 
 
 //-GLOBAL-OPERATOR-OVERLOADS-------------------------------------------------------------------------------------------
+
+number operator+(const number &left, const number &right)
+{
+	switch(left.sign()) {
+		case Sign::Positive:
+			switch(right.sign()) {
+				// +left + +right <=> left + right
+				case Sign::Positive:
+					return number::AddPositive(left, right);
+
+					// +left + -right <=> left - right
+				case Sign::Negative:
+					return number::SubPositive(left, right);
+			}
+
+		case Sign::Negative:
+			switch(right.sign()) {
+				// -left + +right <=> right - left
+				case Sign::Positive:
+					return number::SubPositive(right, left);
+
+					// -left + -right <=> -(left + right)
+				case Sign::Negative:
+					return number::AddPositive(left, right).negate();
+			}
+	}
+}
+
+number operator-(const number &left, const number &right)
+{
+	switch(left.sign()) {
+		case Sign::Positive:
+			switch(right.sign()) {
+				// +left - +right <=> left - right
+				case Sign::Positive:
+					return number::SubPositive(left, right);
+
+					// +left - -right <=> left + right
+				case Sign::Negative:
+					return number::AddPositive(left, right);
+			}
+
+		case Sign::Negative:
+			switch(right.sign()) {
+				// -left - +right <=> -(left + right)
+				case Sign::Positive:
+					return number::AddPositive(right, left).negate();
+
+					// -left - -right <=> right - left
+				case Sign::Negative:
+					return number::SubPositive(right, left).negate();
+			}
+	}
+}
+
+number operator*(const number &left, const number &right)
+{
+	return number::Multiply(left, right);
+}
+
+number operator/(const number &left, const number &right)
+{
+	return number::Divide(left, right);
+}
+
+bool operator==(const number &left, const number &right)
+{
+	return number::Equal(left, right);
+}
+
+bool operator!=(const number &left, const number &right)
+{
+	return number::NotEqual(left, right);
+}
+
+bool operator<(const number &left, const number &right)
+{
+	return number::Less(left, right);
+}
+
+bool operator<=(const number &left, const number &right)
+{
+	return number::LessEqual(left, right);
+}
+
+bool operator>(const number &left, const number &right)
+{
+	return number::More(left, right);
+}
+
+bool operator>=(const number &left, const number &right)
+{
+	return number::MoreEqual(left, right);
+}
 
 std::ostream &operator<<(std::ostream &out, const number &value)
 {
@@ -757,41 +938,5 @@ std::ostream &operator<<(std::ostream &out, const number &value)
 	printVec("den", value.den(), value.denExp());
 
 	return out << "}\n";
-}
-
-int main()
-{
-	//number a(0x7fffffff), b(0x7fffffff), apb = a + b, apbpapb = apb + apb, apbpapbpa = apbpapb + a;
-	number
-			a(Sign::Positive, 2, data_t{2}, 0, data_t{3}),
-			b(Sign::Positive, 0, data_t{3}, 0, data_t{1});
-	//		a(2, 5, number::data_t({ 0xffffffff, 0xffffffff })),
-	//		b(2, 2, number::data_t({ 0xffffffff, 0xffffffff }));
-
-	std::cout
-			<< "a: " << a << "\n"
-			<< "b: " << b << "\n"
-
-			<< "a * b: " << a.power(4) << "\n";
-
-	//		<< "a+b: " << apb << "\n"
-	//<< "a+b+a+b: " << apbpapb << "\n"
-	//<< "a+b+a+b+a: " << apbpapbpa << "\n";
-
-	/*
-	number c = a + b;
-	number d = c / a;
-	number e = d * a;
-	assert(e == a + b);
-	assert(e != a);
-	assert(c > a);
-	assert(a < b);
-	assert(c.power(2) > c);
-	c = number(10).power(-5);
-	assert(c > c.power(2));
-
-	return 0;*/
-
-	return 0;
 }
 

@@ -46,9 +46,10 @@ static sresult_t rsub(num_t* __restrict dest, const num_t* __restrict left, cons
 {
 	do {
 		const sresult_t sum = sresult_t(*left--) - sresult_t(*right--) - overflow;
+		const auto usum = result_t(sum);
 
-		overflow = sum & number::OverflowMask ? 1 : 0;
-		*dest-- = num_t(sum & number::ResultMask);
+		overflow = (usum & number::OverflowMask) ? 1 : 0;
+		*dest-- = num_t(usum & number::ResultMask);
 	} while (--count);
 
 	return overflow;
@@ -75,9 +76,10 @@ static void rneg(num_t* __restrict num, size_t count, sresult_t overflow = 0) no
 {
 	do {
 		const sresult_t sum = -sresult_t(*num) - overflow;
+		const auto usum = result_t(sum);
 
-		overflow = sum & number::OverflowMask ? 1 : 0;
-		*num-- = num_t(sum & number::ResultMask);
+		overflow = (usum & number::OverflowMask) ? 1 : 0;
+		*num-- = num_t(usum & number::ResultMask);
 	} while (--count);
 }
 
@@ -113,9 +115,6 @@ static void rmul(num_t* __restrict dest, const num_t* __restrict bigger, size_t 
 		* const mulBuffer = multiplicationBuffer.data() + biggerSize;
 
 	do {
-		num_t shiftOffset = 0;
-		result_t overflow = 0;
-
 		mulBufferOverflow = rmul(mulBuffer, bigger, *smaller--, biggerSize);
 		*(dest - mulBufferSize) += num_t(rsum(dest, mulBuffer, mulBufferSize));
 
@@ -128,9 +127,9 @@ static void rmul(num_t* __restrict dest, const num_t* __restrict bigger, size_t 
 
 static inline num_t* rptr(data_t& vec) noexcept { return vec.data() + vec.size() - 1; }
 static inline const num_t* rptr(const data_t& vec) noexcept { return vec.data() + vec.size() - 1; }
-static inline exp_t minExp(exp_t exp, const data_t& vec) noexcept { return exp - vec.size(); }
+static inline exp_t minExp(exp_t exp, const data_t& vec) noexcept { return exp - exp_t(vec.size()); }
 
-static inline exp_t pushFront(data_t& vec, num_t value, size_t count = 1) { vec.insert(vec.begin(), count, value); return count; }
+static inline exp_t pushFront(data_t& vec, num_t value, size_t count = 1) { vec.insert(vec.begin(), count, value); return exp_t(count); }
 static inline void  pushBack(data_t& vec, num_t value, size_t count = 1) { vec.insert(vec.end(), count, value); }
 
 // Removes all trailing and leading zeros and returns the change in exponent
@@ -152,7 +151,7 @@ static exp_t truncate(exp_t exp, data_t& vec)
 
 		// Move non-zero values to front and erase the rest
 		std::rotate(vec.begin(), front, back);
-		vec.resize(std::distance(front, back));
+		vec.resize(size_t(std::distance(front, back)));
 
 		return exp - expChange;
 	}
@@ -178,9 +177,9 @@ static exp_t add(data_t& result, exp_t leftExp, data_t&& left, exp_t rightExp, d
 		leftIsLower = leftMinExp < rightMinExp;
 
 	data_t
-		& upper = leftIsUpper ? left : right,
+//		& upper = leftIsUpper ? left : right,    <-- unused
 		& notUpper = leftIsUpper ? right : left,
-		& lower = leftIsLower ? left : right,
+//		& lower = leftIsLower ? left : right,    <-- unused
 		& notLower = leftIsLower ? right : left;
 
 	const exp_t
@@ -190,13 +189,13 @@ static exp_t add(data_t& result, exp_t leftExp, data_t&& left, exp_t rightExp, d
 		notLowerMinExp = leftIsLower ? rightMinExp : leftMinExp;
 
 	// Prepare result
-	const auto size = upperExp - lowerMinExp;
+	const auto size = size_t(upperExp - lowerMinExp);
 	result.clear();
 	result.resize(size);
 
 	// Equalize number sizes
-	pushFront(notUpper, 0, upperExp - notUpperExp);
-	pushBack(notLower, 0, notLowerMinExp - lowerMinExp);
+	pushFront(notUpper, 0, size_t(upperExp - notUpperExp));
+	pushBack(notLower, 0, size_t(notLowerMinExp - lowerMinExp));
 
 	exp_t expDelta = 0;
 
@@ -225,9 +224,9 @@ static SubResult sub(data_t& result, exp_t leftExp, data_t&& left, exp_t rightEx
 		leftIsLower = leftMinExp < rightMinExp;
 
 	data_t
-		& upper = leftIsUpper ? left : right,
+//		& upper = leftIsUpper ? left : right,    <-- unused
 		& notUpper = leftIsUpper ? right : left,
-		& lower = leftIsLower ? left : right,
+//		& lower = leftIsLower ? left : right,    <-- unused
 		& notLower = leftIsLower ? right : left;
 
 	const exp_t
@@ -237,13 +236,13 @@ static SubResult sub(data_t& result, exp_t leftExp, data_t&& left, exp_t rightEx
 		notLowerMinExp = leftIsLower ? rightMinExp : leftMinExp;
 
 	// Prepare result
-	const auto size = upperExp - lowerMinExp;
+	const auto size = size_t(upperExp - lowerMinExp);
 	result.clear();
 	result.resize(size);
 
 	// Equalize number sizes
-	pushFront(notUpper, 0, upperExp - notUpperExp);
-	pushBack(notLower, 0, notLowerMinExp - lowerMinExp);
+	pushFront(notUpper, 0, size_t(upperExp - notUpperExp));
+	pushBack(notLower, 0, size_t(notLowerMinExp - lowerMinExp));
 
 	Sign sign = Sign::Positive;
 
@@ -276,7 +275,7 @@ static exp_t multiply(data_t& result, exp_t leftExp, const data_t& left, exp_t r
 
 	rmul(rptr(result), rptr(bigger), bigger.size(), rptr(smaller), smaller.size());
 
-	return truncate(leftExp + rightExp + sizeChange, result);
+	return truncate(leftExp + rightExp + exp_t(sizeChange), result);
 }
 
 static exp_t square(data_t& result, exp_t numExp, const data_t& num)
@@ -291,7 +290,7 @@ static exp_t square(data_t& result, exp_t numExp, const data_t& num)
 
 	rmul(rptr(result), rptr(num), numSize, rptr(num), numSize);
 
-	return truncate(numExp + numExp + sizeChange, result);
+	return truncate(numExp + numExp + exp_t(sizeChange), result);
 }
 
 static exp_t power(data_t& result, exp_t numExp, const data_t& num, uexp_t exp)
@@ -547,7 +546,7 @@ number number::power(exp_t exp) const
 	return Power(*this, exp);
 }
 
-number number::sqrt(digits_t digits) const
+number number::sqrt(digits_t) const
 {
 	// TODO
 	return {};
@@ -629,21 +628,23 @@ number number::Power(const number& num, exp_t exp)
 
 	if (checkPower(result, num, exp)) {
 		if (exp > 0) {
-			result.m_nomExp = ::power(result.m_nom, num.m_nomExp, num.m_nom, exp);
-			result.m_denExp = ::power(result.m_den, num.m_denExp, num.m_den, exp);
+			const auto uexp = uexp_t(exp);
+
+			result.m_nomExp = ::power(result.m_nom, num.m_nomExp, num.m_nom, uexp);
+			result.m_denExp = ::power(result.m_den, num.m_denExp, num.m_den, uexp);
 		}
 		else {
-			exp = -exp;
+			const auto uexp = uexp_t(-exp);
 
-			result.m_nomExp = ::power(result.m_nom, num.m_denExp, num.m_den, exp);
-			result.m_denExp = ::power(result.m_den, num.m_nomExp, num.m_nom, exp);
+			result.m_nomExp = ::power(result.m_nom, num.m_denExp, num.m_den, uexp);
+			result.m_denExp = ::power(result.m_den, num.m_nomExp, num.m_nom, uexp);
 		}
 	}
 
 	return result;
 }
 
-number number::Sqrt(const number& num, digits_t digits)
+number number::Sqrt(const number& num, digits_t)
 {
 	number result;
 
